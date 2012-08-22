@@ -92,7 +92,6 @@ class Migrate(object):
 
 		results = self._request(resource_url, post)
 
-		#pp(results)
 		count = len(results['hits']['hits'])
 		records = self._extract_records(results['hits']['hits'], fields)
 		new_scroll_id = results['_scroll_id']
@@ -100,7 +99,6 @@ class Migrate(object):
 		return records, new_scroll_id, count
 
 	def _extract_fields(self, properties):
-		#pp(properties)
 		fields = []
 		for p_id, value in properties.items():
 			field = {'id': self._validate_field_name(p_id)}
@@ -108,7 +106,6 @@ class Migrate(object):
 			if value.has_key('format'):
 				field['format'] = p_format = value['format']
 			fields.append(field)
-		#pp(fields)
 		return fields
 
 	def _extract_records(self, hits, fields):
