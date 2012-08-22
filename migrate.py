@@ -50,7 +50,82 @@ class Migrate(object):
 				break
 			
 			logging.info("Processing resource nr {nr} with id {resid}".format(nr=i, resid=resource_id))
-			self._process_resource(resource_id, properties)
+			data_dict = self._process_resource(resource_id, properties)
+			self._save(data_dict)
+
+	def _process_resource(self, resource_id, properties):
+		fields = self._extract_fields(properties['properties'])
+
+		records = []
+		for records_chunk in self._scan_iterator(resource_id, fields):
+			records += records_chunk
+
+		data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records}
+
+		return data_dict
+
+	def _process_chunk(self, scroll_id, fields):
+		'''
+		Processes one chunk = one part of the resource during scrolling
+		'''
+		resource_url = self.es_url + '_search/scroll?scroll=10m'
+		post = scroll_id
+		
+		logging.debug("Processing chunk with schroll id: {id}".format(id=scroll_id))
+
+		results = self._request(resource_url, post)
+
+		#pp(results)
+		count = len(results['hits']['hits'])
+		records = self._extract_records(results['hits']['hits'], fields)
+		new_scroll_id = results['_scroll_id']
+
+		return records, new_scroll_id, count
+
+	def _extract_fields(self, properties):
+		pp(properties)
+		fields = []
+		for p_id, value in properties.items():
+			field = {'id': self._validate_field_name(p_id)}
+			field['type'] = self.type_mapping[value['type']]
+			if value.has_key('format'):
+				field['format'] = p_format = value['format']
+			fields.append(field)
+		pp(fields)
+		return fields
+
+	def _validate_field_name(self, name):
+		'''
+		tries to clean the field name
+		'''
+		return name.strip().strip('"')
+
+	def _extract_records(self, hits, fields):
+		records = []
+		for hit in hits:
+			record = {}
+			for key, value in hit['_source'].items():
+				key = self._validate_field_name(key)
+				#if any(x['type'] == 'timestamp' for x in fields if x['id']==key):
+				#try:
+				#	field = filter(lambda x: x['id'] == key, fields)[0]
+				#except Exception:
+				#	pp(fields)
+				#	print key
+				#	raise
+				#if field['type'] == 'timestamp':
+				#	record[key] = time.strptime(value, field['format'])
+				#	continue
+
+				# ignore fields that are not in the mapping
+				field = [x for x in fields if x['id']==key]
+				if len(field):
+					field = field[0]
+					if field['type'] == 'text':
+						value = unicode(value)
+					record[key] = value
+			records.append(record)
+		return records
 
 	def _mapping_iterator(self):
 		'''
@@ -113,53 +188,6 @@ class Migrate(object):
 		while count:
 			records_chunk, scroll_id, count = self._process_chunk(scroll_id, fields)
 			yield records_chunk
-
-	def _process_resource(self, resource_id, properties):
-		fields = self._extract_fields(properties['properties'])
-
-		records = []
-		for records_chunk in self._scan_iterator(resource_id, fields):
-			records += records_chunk
-
-		data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records}
-
-		#pp(data_dict)
-
-	def _process_chunk(self, scroll_id, fields):
-		'''
-		Processes one chunk = one part of the resource during scrolling
-		'''
-		resource_url = self.es_url + '_search/scroll?scroll=10m'
-		post = scroll_id
-		
-		logging.debug("Processing chunk with schroll id: {id}".format(id=scroll_id))
-
-		results = self._request(resource_url, post)
-
-		#pp(results)
-		count = len(results['hits']['hits'])
-		records = self._extract_records(results['hits']['hits'], fields)
-		new_scroll_id = results['_scroll_id']
-
-		return records, new_scroll_id, count
-
-	def _extract_fields(self, properties):
-		#pp(properties)
-		fields = []
-		for p_id, value in properties.items():
-			p_type = value['type']
-			fields.append({'id': p_id, 'type': self.type_mapping[p_type]})
-		return fields
-
-	def _extract_records(self, hits, fields):
-		#pp(hits)
-		records = []
-		for hit in hits:
-			record = {}
-			for key, value in hit['_source'].items():
-				record[key] = value
-			records.append(record)
-		return records
 
 	def _request(self, url, query = None):
 		'''Perform a request on ElasticSearch endpoint.
