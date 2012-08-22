@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 '''
-A simple script to migrate from elasticsearch to the ckan datastore. 	
+A basic script to migrate from elasticsearch to the ckan datastore.
+
+For command line usage do:
+	python migrate.py -h
 '''
 
 import urllib2, urllib
@@ -9,11 +12,13 @@ from time import gmtime, strftime
 import os, imp
 import logging
 from pprint import pprint as pp
+import hashlib
 
 import ckanext.datastore.db as db
 
-logging.basicConfig(level=logging.INFO)
-
+logging.basicConfig()
+logger = logging.getLogger('migrate')
+logger.setLevel(logging.INFO)
 
 class Migrate(object):
 	def __init__(self, config, start = None):
@@ -29,6 +34,8 @@ class Migrate(object):
 
 		self.url = self.es_url + self.index
 
+		self.active_resource_id = None # only for logging
+
 	def run(self):
 		'''
 		Migrates resources from elastic search to the datastore. 
@@ -40,7 +47,7 @@ class Migrate(object):
 		started_at = 0
 		for i, (resource_id, properties) in enumerate(self.mapiter):
 			if self.start_id and resource_id != self.start_id:
-				logging.info("Jumping over {resid}".format(resid=resource_id))
+				logger.debug("Jumping over {resid}".format(resid=resource_id))
 				continue
 			elif self.start_id and resource_id == self.start_id:
 				started_at = i
@@ -49,7 +56,8 @@ class Migrate(object):
 			if self.max_records and i - started_at >= self.max_records:
 				break
 			
-			logging.info("Processing resource nr {nr} with id {resid}".format(nr=i, resid=resource_id))
+			logger.info("Processing resource nr {nr} with id {resid}".format(nr=i, resid=resource_id))
+			self.active_resource_id = resource_id
 			data_dict = self._process_resource(resource_id, properties)
 			self._save(data_dict)
 
@@ -71,7 +79,7 @@ class Migrate(object):
 		resource_url = self.es_url + '_search/scroll?scroll=10m'
 		post = scroll_id
 		
-		logging.debug("Processing chunk with schroll id: {id}".format(id=scroll_id))
+		logger.debug("Processing chunk with schroll id: {id}".format(id=scroll_id))
 
 		results = self._request(resource_url, post)
 
@@ -83,7 +91,7 @@ class Migrate(object):
 		return records, new_scroll_id, count
 
 	def _extract_fields(self, properties):
-		pp(properties)
+		#pp(properties)
 		fields = []
 		for p_id, value in properties.items():
 			field = {'id': self._validate_field_name(p_id)}
@@ -98,6 +106,12 @@ class Migrate(object):
 		'''
 		tries to clean the field name
 		'''
+
+		# truncate because of maximum field size of 63 in pg
+		if len(name) >= 63:
+			name = name[:56] + hashlib.md5(name).hexdigest()[:6]
+
+		# strip " and whitespaces
 		return name.strip().strip('"')
 
 	def _extract_records(self, hits, fields):
@@ -124,6 +138,8 @@ class Migrate(object):
 					if field['type'] == 'text':
 						value = unicode(value)
 					record[key] = value
+				else:
+					logger.warn("Found a field that is not in the mapping: {fieldname} in {resource}".format(fieldname=key, resource=self.active_resource_id))
 			records.append(record)
 		return records
 
@@ -136,17 +152,17 @@ class Migrate(object):
 
 		path = os.path.join(os.path.dirname(__file__), 'dump_' + self.index + '.json')
 		if os.path.exists(path) and self.use_dump:
-			logging.info("Use dumped mapping: {path}".format(path=path))
+			logger.info("Use dumped mapping: {path}".format(path=path))
 			with open(path, 'r') as dump:
 				mapping = json.loads(dump.read())
 		
 		if not mapping:
 			mapping_url = self.url + '/' + '_mapping'
-			logging.info("Mapping url: {url}".format(url=mapping_url))
+			logger.info("Mapping url: {url}".format(url=mapping_url))
 			mapping = self._request(mapping_url)
 
 			if self.use_dump:
-				logging.info("Dumped mapping to: {path}".format(path=path))
+				logger.info("Dumped mapping to: {path}".format(path=path))
 				with open(path, 'w+') as dump:
 					dump.write(json.dumps(mapping))
 
@@ -172,17 +188,17 @@ class Migrate(object):
 
 		resource_url = resource_url + '?' + urllib.urlencode(get)
 
-		logging.debug("Processing resource: {resource}".format(resource=resource_id))
-		logging.debug("Scan url: {url}".format(url=resource_url))
+		logger.debug("Processing resource: {resource}".format(resource=resource_id))
+		logger.debug("Scan url: {url}".format(url=resource_url))
 
 		scroll = self._request(resource_url, post)
 
 		scroll_id = scroll['_scroll_id']
 		total = scroll['hits']['total']
 		
-		logging.debug("Initial scroll id: {id}".format(id=scroll_id))
+		logger.debug("Initial scroll id: {id}".format(id=scroll_id))
 
-		logging.info("Found {total} records".format(total=total))
+		logger.info("Found {total} records".format(total=total))
 
 		count = True
 		while count:
@@ -202,7 +218,7 @@ class Migrate(object):
 		try:
 			out = urllib2.urlopen(req).read()
 		except Exception, inst:
-			logging.error('%s: %s' % (inst.url, inst.read()))
+			logger.error('%s: %s' % (inst.url, inst.read()))
 			raise
 		return json.loads(out)
 
@@ -223,7 +239,7 @@ class Migrate(object):
 
 
 ## ======================================
-## Cli
+## Command line interface
 
 if __name__ == '__main__':
 	import argparse
