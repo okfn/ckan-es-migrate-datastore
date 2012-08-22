@@ -13,7 +13,7 @@ postgres_url = 'postgresql://ckanuser:pass@localhost/datastore'
 # mapping from es types to pg types
 type_mapping = {
 	'string': 'text',
-	'long': 'int4',
+	'long': 'int8',
 	'double': 'float8',
 	'date': 'timestamp', # probably 17/04/2012 13:28:05 -> 2005-03-01
 	'int': 'int4',
@@ -25,7 +25,7 @@ type_mapping = {
 chunk_size = 100
 
 # maximum number of records to process, None if no limit
-max_records = 5
+max_records = 20
 
 # use a dumped mapping file, if available
 use_dump = False

@@ -9,6 +9,8 @@ For command line usage do:
 import urllib2, urllib
 import json
 from time import gmtime, strftime
+from dateutil.parser import *
+from datetime import *
 import os, imp
 import logging
 from pprint import pprint as pp
@@ -16,12 +18,12 @@ import hashlib
 
 import ckanext.datastore.db as db
 
-logging.basicConfig()
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger('migrate')
 logger.setLevel(logging.INFO)
 
 class Migrate(object):
-	def __init__(self, config, start = None):
+	def __init__(self, config, start = None, simulate = False):
 		self.es_url = config.es_url
 		self.index = config.index
 		self.postgres_url = config.postgres_url
@@ -30,6 +32,7 @@ class Migrate(object):
 		self.max_records = config.max_records
 		self.use_dump = config.use_dump
 
+		self.simulate = simulate
 		self.start_id = start
 
 		self.url = self.es_url + self.index
@@ -59,16 +62,15 @@ class Migrate(object):
 			logger.info("Processing resource nr {nr} with id {resid}".format(nr=i, resid=resource_id))
 			self.active_resource_id = resource_id
 			data_dict = self._process_resource(resource_id, properties)
-			self._save(data_dict)
 
 	def _process_resource(self, resource_id, properties):
 		fields = self._extract_fields(properties['properties'])
 
 		records = []
 		for records_chunk in self._scan_iterator(resource_id, fields):
-			records += records_chunk
-
-		data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records}
+			data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records_chunk}
+			if not self.simulate:
+				self._save(data_dict)
 
 		return data_dict
 
@@ -99,7 +101,7 @@ class Migrate(object):
 			if value.has_key('format'):
 				field['format'] = p_format = value['format']
 			fields.append(field)
-		pp(fields)
+		#pp(fields)
 		return fields
 
 	def _extract_records(self, hits, fields):
@@ -115,9 +117,9 @@ class Migrate(object):
 					field = field[0]
 					if field['type'] == 'text':
 						value = unicode(value)
-					#elif field['type'] == 'timestamp':
-					#	record[key] = time.strptime(value, field['format'])
-					#	continue
+					elif field['type'] == 'timestamp':
+						logger.debug("Found a date: {date}".format(date=value))
+						value = str(parse(value)) # field['format']
 					record[key] = value
 				else:
 					logger.warn("Found a field that is not in the mapping: {fieldname} in {resource}".format(fieldname=key, resource=self.active_resource_id))
@@ -242,14 +244,16 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(
 		description='Migrate from elasticsearch to the CKAN datastore', 
 		epilog='"He reached out and pressed an invitingly large red button on a nearby panel. The panel lit up with the words Please do not press this button again."')
-	parser.add_argument('--start', metavar='START-RES-ID', type=str, default=None,
+	parser.add_argument('--start', metavar='START-RES-ID', type=str, default=None, dest='start',
 	                   help='resource id to start with (default is the beginning)')
 	parser.add_argument('config', metavar='CONFIG', type=file, 
 	                   help='configuration file')
+	parser.add_argument('-s', '--simulate', action='store_true', dest='simulate',
+	                   help="don't store anything in the database")
 
 	args = parser.parse_args()
 
 	config = imp.load_source('config', args.config.name)
 
-	m = Migrate(config, args.start)
+	m = Migrate(config, args.start, args.simulate)
 	m.run()
