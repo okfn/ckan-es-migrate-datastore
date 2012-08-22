@@ -1,49 +1,87 @@
-import ckanext.datastore.db as db
-import urllib2
-import urllib
-import json
-from pprint import pprint as pp
-import logging
-from time import gmtime, strftime
-import os
-import imp
+#!/usr/bin/env python
+'''
+A simple script to migrate from elasticsearch to the ckan datastore. 	
+'''
 
-# TODO start at a certain record (in case something fails)
+import urllib2, urllib
+import json
+from time import gmtime, strftime
+import os, imp
+import logging
+from pprint import pprint as pp
+
+import ckanext.datastore.db as db
 
 logging.basicConfig(level=logging.INFO)
+
 
 class Migrate(object):
 	def __init__(self, config, start = None):
 		self.es_url = config.es_url
-		self.node = config.node
+		self.index = config.index
 		self.postgres_url = config.postgres_url
 		self.type_mapping = config.type_mapping
 		self.chunk_size = config.chunk_size
 		self.max_records = config.max_records
+		self.use_dump = config.use_dump
 
-		self.url = self.es_url + self.node
+		self.start_id = start
+
+		self.url = self.es_url + self.index
 
 	def run(self):
+		'''
+		Migrates resources from elastic search to the datastore. 
+		A start resource id can be defined so that in case of an error the migration
+		can continue from a certain point without redoing the previous migrations. 
+		'''
 		self.mapiter = self._mapping_iterator()
 		
+		started_at = 0
 		for i, (resource_id, properties) in enumerate(self.mapiter):
-			if i >= self.max_records:
+			if self.start_id and resource_id != self.start_id:
+				logging.info("Jumping over {resid}".format(resid=resource_id))
+				continue
+			elif self.start_id and resource_id == self.start_id:
+				started_at = i
+				self.start_id = None
+
+			if self.max_records and i - started_at >= self.max_records:
 				break
-			logging.info("Processing resource nr {nr} with id {rid}".format(nr=i, rid=resource_id))
+			
+			logging.info("Processing resource nr {nr} with id {resid}".format(nr=i, resid=resource_id))
 			self._process_resource(resource_id, properties)
 
 	def _mapping_iterator(self):
-		# TODO: Use dump
-		mapping_url = self.url + '/' + '_mapping'
+		'''
+		Iterator for resources from the mapping. The mapping can be dumped in order to 
+		use the same mapping for multiple runs. 
+		'''
+		mapping = None
 
-		logging.info("Mapping url: {url}".format(url=mapping_url))
+		path = os.path.join(os.path.dirname(__file__), 'dump_' + self.index + '.json')
+		if os.path.exists(path) and self.use_dump:
+			logging.info("Use dumped mapping: {path}".format(path=path))
+			with open(path, 'r') as dump:
+				mapping = json.loads(dump.read())
+		
+		if not mapping:
+			mapping_url = self.url + '/' + '_mapping'
+			logging.info("Mapping url: {url}".format(url=mapping_url))
+			mapping = self._request(mapping_url)
 
-		mapping = self._request(mapping_url)
+			if self.use_dump:
+				logging.info("Dumped mapping to: {path}".format(path=path))
+				with open(path, 'w+') as dump:
+					dump.write(json.dumps(mapping))
 
 		for key, value in mapping['ckan-www.ckan.net'].items():
 			yield key, value
 
 	def _scan_iterator(self, resource_id, fields):
+		'''
+		Iterator for scan searches
+		'''
 		resource_url = self.url + '/' + resource_id + '/_search'
 
 		get = {
@@ -88,6 +126,9 @@ class Migrate(object):
 		#pp(data_dict)
 
 	def _process_chunk(self, scroll_id, fields):
+		'''
+		Processes one chunk = one part of the resource during scrolling
+		'''
 		resource_url = self.es_url + '_search/scroll?scroll=10m'
 		post = scroll_id
 		
@@ -142,6 +183,7 @@ class Migrate(object):
 		data_dict['connection_url'] =  self.postgres_url
 		result = db.create(context, data_dict)
 
+
 # expected format
 """data_dict = {
 	'resource_id': '123',
@@ -170,5 +212,5 @@ if __name__ == '__main__':
 
 	config = imp.load_source('config', args.config.name)
 
-	m = Migrate(config)
+	m = Migrate(config, args.start)
 	m.run()
