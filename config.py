@@ -27,5 +27,8 @@ config = {
 	'chunk_size': 100,
 
 	# use a dumped mapping file, if available
-	'use_dump': False
+	'use_dump': True, 
+
+	# ignore errors when saving data to the datastore and log the incident
+	'ignore_exceptions': False
 }

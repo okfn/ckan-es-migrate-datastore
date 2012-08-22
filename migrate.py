@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 '''
-A basic script to migrate from elasticsearch to the ckan datastore.
+A basic script to migrate from elasticsearch to the ckan datastore that uses postgresql. 
 
 For command line usage do:
 	python migrate.py -h
+
+Elasticsearch is abbreviated es, postgres is pg. The configuration is done through 
+command line parameters (for frequently changing preferences) and the config file. 
+Make yourself familiar with the settings and try running the script in simulation 
+mode first. 
 '''
 
 import urllib2, urllib
@@ -18,9 +23,11 @@ import hashlib
 
 import ckanext.datastore.db as db
 
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger('migrate')
 logger.setLevel(logging.INFO)
+
 
 class Migrate(object):
 	def __init__(self, config = {}, **args):
@@ -63,8 +70,15 @@ class Migrate(object):
 		for records_chunk in self._scan_iterator(resource_id, fields):
 			data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records_chunk}
 			if not self.simulate:
-				self._save(data_dict)
-
+				try:
+					self._save(data_dict)
+				except Exception, e:
+					if self.ignore_exceptions:
+						logger.critical("An exception was raised while saving resource: {resid}. Aborted operation.\n{type} {err}"
+							.format(resid=resource_id, type=type(e).__name__, err=e))
+					else:
+						raise e
+						
 		return data_dict
 
 	def _process_chunk(self, scroll_id, fields):
