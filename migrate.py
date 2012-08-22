@@ -23,17 +23,10 @@ logger = logging.getLogger('migrate')
 logger.setLevel(logging.INFO)
 
 class Migrate(object):
-	def __init__(self, config, start = None, simulate = False):
-		self.es_url = config.es_url
-		self.index = config.index
-		self.postgres_url = config.postgres_url
-		self.type_mapping = config.type_mapping
-		self.chunk_size = config.chunk_size
-		self.max_records = config.max_records
-		self.use_dump = config.use_dump
+	def __init__(self, config = {}, **args):
+		self.__dict__.update(config.config)
 
-		self.simulate = simulate
-		self.start_id = start
+		self.__dict__.update(args)
 
 		self.url = self.es_url + self.index
 
@@ -225,16 +218,6 @@ class Migrate(object):
 		result = db.create(context, data_dict)
 
 
-# expected format
-"""data_dict = {
-	'resource_id': '123',
-	'fields': [{'id': 'book', 'type': 'text'},
-			   {'id': 'author', 'type': 'text'}],
-	'records': [{'book': 'annakarenina', 'author': 'tolstoy'},
-				{'book': 'warandpeace', 'name': 'tolstoy'}]
-}"""
-
-
 ## ======================================
 ## Command line interface
 
@@ -244,16 +227,20 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(
 		description='Migrate from elasticsearch to the CKAN datastore', 
 		epilog='"He reached out and pressed an invitingly large red button on a nearby panel. The panel lit up with the words Please do not press this button again."')
-	parser.add_argument('--start', metavar='START-RES-ID', type=str, default=None, dest='start',
-	                   help='resource id to start with (default is the beginning)')
+	
 	parser.add_argument('config', metavar='CONFIG', type=file, 
 	                   help='configuration file')
-	parser.add_argument('-s', '--simulate', action='store_true', dest='simulate',
+
+	parser.add_argument('--max', metavar='N', type=int, default=None, dest='max_records',
+	                   help='maximum number of records to process (default is unlimited)')
+	parser.add_argument('--start', metavar='START-RES-ID', type=str, default=None, dest='start',
+	                   help='resource id to start with (default is the beginning)')
+	parser.add_argument('-s', '--simulate', action='store_true', dest='simulate', default=False, 
 	                   help="don't store anything in the database")
 
 	args = parser.parse_args()
 
 	config = imp.load_source('config', args.config.name)
 
-	m = Migrate(config, args.start, args.simulate)
+	m = Migrate(config, start_id=args.start, simulate=args.simulate, max_records=args.max_records)
 	m.run()
