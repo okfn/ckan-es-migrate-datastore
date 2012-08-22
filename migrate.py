@@ -102,41 +102,22 @@ class Migrate(object):
 		pp(fields)
 		return fields
 
-	def _validate_field_name(self, name):
-		'''
-		tries to clean the field name
-		'''
-
-		# truncate because of maximum field size of 63 in pg
-		if len(name) >= 63:
-			name = name[:56] + hashlib.md5(name).hexdigest()[:6]
-
-		# strip " and whitespaces
-		return name.strip().strip('"')
-
 	def _extract_records(self, hits, fields):
 		records = []
 		for hit in hits:
 			record = {}
 			for key, value in hit['_source'].items():
 				key = self._validate_field_name(key)
-				#if any(x['type'] == 'timestamp' for x in fields if x['id']==key):
-				#try:
-				#	field = filter(lambda x: x['id'] == key, fields)[0]
-				#except Exception:
-				#	pp(fields)
-				#	print key
-				#	raise
-				#if field['type'] == 'timestamp':
-				#	record[key] = time.strptime(value, field['format'])
-				#	continue
 
 				# ignore fields that are not in the mapping
-				field = [x for x in fields if x['id']==key]
-				if len(field):
+				field = [x for x in fields if x['id'] == key]
+				if len(field) == 1:
 					field = field[0]
 					if field['type'] == 'text':
 						value = unicode(value)
+					#elif field['type'] == 'timestamp':
+					#	record[key] = time.strptime(value, field['format'])
+					#	continue
 					record[key] = value
 				else:
 					logger.warn("Found a field that is not in the mapping: {fieldname} in {resource}".format(fieldname=key, resource=self.active_resource_id))
@@ -221,6 +202,20 @@ class Migrate(object):
 			logger.error('%s: %s' % (inst.url, inst.read()))
 			raise
 		return json.loads(out)
+
+	def _validate_field_name(self, name):
+		'''
+		tries to clean the field name
+		'''
+		
+		# strip " and whitespaces
+		name = name.strip().strip('"')
+
+		# truncate because of maximum field size of 63 in pg
+		if len(name) >= 63:
+			name = name[:56] + hashlib.md5(name).hexdigest()[:6]
+		
+		return name
 
 	def _save(self, data_dict):
 		context = {}
