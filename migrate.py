@@ -203,8 +203,11 @@ class Migrate(object):
 		tries to clean the field name
 		'''
 		
-		# strip " and whitespaces
-		name = name.strip().strip('"')
+		# strip ", whitespaces and _
+		name = name.strip().strip('"').strip("_").strip()
+
+		# replace all " with '
+		name = name.replace('"', "'")
 
 		# truncate because of maximum field size of 63 in pg
 		if len(name) >= 63:
