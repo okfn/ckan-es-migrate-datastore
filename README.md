@@ -13,4 +13,5 @@ mode first.
 
 ## In order to clean the database (in case something goes wrong), use this command to delete all tables.
 
-    select 'drop table "' || tablename || '" cascade;' from pg_tables where schemaname = 'public';
+    select 'drop table "' || tablename || '" cascade;' 
+    from pg_tables where schemaname = 'public';

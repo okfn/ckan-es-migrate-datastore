@@ -39,6 +39,8 @@ class Migrate(object):
 
         self.active_resource_id = None # only for logging
 
+        self.total = len([0 for x in self._mapping_iterator()])
+
     def run(self):
         '''
         Migrates resources from elastic search to the datastore. 
@@ -59,7 +61,7 @@ class Migrate(object):
             if self.max_records and i - started_at >= self.max_records:
                 break
             
-            logger.info("Processing resource nr {nr} with id {resid}".format(nr=i, resid=resource_id))
+            logger.info("Processing resource nr {nr} of {total} with id {resid}".format(nr=i, total=self.total, resid=resource_id))
             self.active_resource_id = resource_id
             data_dict = self._process_resource(resource_id, properties)
 
