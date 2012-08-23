@@ -6,7 +6,7 @@ For command line usage do:
     python migrate.py -h
 
 Elasticsearch is abbreviated es, postgres is pg. The script is configured through 
-command line parameters (for frequently changing preferences) and the config file. 
+command line parameters (for frequently changing preferences) and the configuration file. 
 Make yourself familiar with the settings and try running the script in simulation 
 mode first. 
 '''
@@ -51,7 +51,9 @@ class Migrate(object):
         
         started_at = 0
         for i, (resource_id, properties) in enumerate(self.mapiter):
-            if self.start_id and resource_id != self.start_id:
+            jump_because_not_start = self.start_id and resource_id != self.start_id
+            jump_because_segment = self.segments and not hashlib.md5(resource_id).hexdigest().startswith(self.segments)
+            if jump_because_not_start or jump_because_segment:
                 logger.debug("Jumping over {resid}".format(resid=resource_id))
                 continue
             elif self.start_id and resource_id == self.start_id:
@@ -272,10 +274,12 @@ if __name__ == '__main__':
                        help='resource id to start with (default is the beginning)')
     parser.add_argument('-s', '--simulate', action='store_true', dest='simulate', default=False, 
                        help="don't store anything in the database")
+    parser.add_argument('--segments', dest='segments', default=None, metavar='SEGMENTS', 
+                       help="only process items where the hash starts with SEGMENTS")
 
     args = parser.parse_args()
 
     config = imp.load_source('config', args.config.name)
 
-    m = Migrate(config, start_id=args.start, simulate=args.simulate, max_records=args.max_records)
+    m = Migrate(config, start_id=args.start, simulate=args.simulate, max_records=args.max_records, segments=args.segments)
     m.run()
