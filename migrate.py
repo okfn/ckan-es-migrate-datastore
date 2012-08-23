@@ -233,6 +233,10 @@ class Migrate(object):
         if len(name) >= 63:
             name = name[:56] + hashlib.md5(name).hexdigest()[:6]
         
+        # transform empty names
+        if not name:
+            name = '##empty##'
+
         return name
 
     def _save(self, data_dict):
