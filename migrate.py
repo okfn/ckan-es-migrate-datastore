@@ -104,9 +104,13 @@ class Migrate(object):
         fields = []
         for p_id, value in properties.items():
             field = {'id': self._validate_field_name(p_id)}
-            field['type'] = self.type_mapping[value['type']]
-            if value.has_key('format'):
-                field['format'] = p_format = value['format']
+            # nested type
+            if 'dynamic' in value:
+                field['type'] = self.type_mapping['nested']
+            else:
+                field['type'] = self.type_mapping[value['type']]
+                if 'format' in value:
+                    field['format'] = p_format = value['format']
             fields.append(field)
         return fields
 
