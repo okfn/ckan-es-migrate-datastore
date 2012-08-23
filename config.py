@@ -17,9 +17,8 @@ config = {
         'string': 'text',
         'long': 'int8',
         'double': 'float8',
-        'date': 'timestamp', # probably 17/04/2012 13:28:05 -> 2005-03-01
+        'date': 'timestamp',
         'int': 'int4',
-        '': 'tsvector',
         'nested': '_json'
     },
 

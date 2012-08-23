@@ -124,8 +124,12 @@ class Migrate(object):
                     if field['type'] == 'text':
                         value = unicode(value)
                     elif field['type'] == 'timestamp':
-                        logger.debug("Found a date: {date}".format(date=value))
-                        value = str(parse(value)) # field['format']
+                        # guess whether the date is day first
+                        dayfirst = not field['format'].lower().startswith('m')
+                        isodate = str(parse(value, dayfirst = dayfirst))
+                        logger.debug("Found a date: {date} with the format {format} which is parsed to {isodate}"
+                            .format(date=value, format=field['format'], isodate=isodate))
+                        value = isodate
                     record[key] = value
                 else:
                     if value:
