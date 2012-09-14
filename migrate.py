@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 '''
-A basic script to migrate from elasticsearch to the ckan datastore that uses postgresql. 
+A basic script to migrate from elasticsearch to the ckan datastore that uses postgresql.
 
 For command line usage do:
     python migrate.py -h
 
-Elasticsearch is abbreviated es, postgres is pg. The script is configured through 
-command line parameters (for frequently changing preferences) and the configuration file. 
-Make yourself familiar with the settings and try running the script in simulation 
-mode first. 
+Elasticsearch is abbreviated es, postgres is pg. The script is configured through
+command line parameters (for frequently changing preferences) and the configuration file.
+Make yourself familiar with the settings and try running the script in simulation
+mode first.
 '''
 
 import urllib2, urllib
@@ -21,7 +21,10 @@ import logging
 from pprint import pprint as pp
 import hashlib
 
-import ckanext.datastore.db as db
+if not os.environ.get('DATASTORE_LOAD'):
+    import db
+else:
+    import ckanext.datastore.db as db
 
 
 logging.basicConfig(level=logging.WARNING)
@@ -30,7 +33,7 @@ logger.setLevel(logging.INFO)
 
 
 class Migrate(object):
-    def __init__(self, config = {}, **args):
+    def __init__(self, config={}, **args):
         self.__dict__.update(config.config)
 
         self.__dict__.update(args)
@@ -43,16 +46,16 @@ class Migrate(object):
 
     def run(self):
         '''
-        Migrates resources from elastic search to the datastore. 
+        Migrates resources from elastic search to the datastore.
         A start resource id can be defined so that in case of an error the migration
-        can continue from a certain point without redoing the previous migrations. 
+        can continue from a certain point without redoing the previous migrations.
         '''
         self.mapiter = self._mapping_iterator()
-        
+
         started_at = 0
         for i, (resource_id, properties) in enumerate(self.mapiter):
             jump_because_not_start = self.start_id and resource_id != self.start_id
-            jump_because_segment = self.segments and not hashlib.md5(resource_id).hexdigest().startswith(self.segments)
+            jump_because_segment = self.segments and not hashlib.md5(resource_id).hexdigest()[1] in self.segments
             if jump_because_not_start or jump_because_segment:
                 logger.debug("Jumping over {resid}".format(resid=resource_id))
                 continue
@@ -62,7 +65,7 @@ class Migrate(object):
 
             if self.max_records and i - started_at >= self.max_records:
                 break
-            
+
             logger.info("Processing resource nr {nr} of {total} with id {resid}".format(nr=i, total=self.total, resid=resource_id))
             self.active_resource_id = resource_id
             data_dict = self._process_resource(resource_id, properties)
@@ -70,7 +73,6 @@ class Migrate(object):
     def _process_resource(self, resource_id, properties):
         fields = self._extract_fields(properties['properties'])
 
-        records = []
         for records_chunk in self._scan_iterator(resource_id, fields):
             data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records_chunk}
             if not self.simulate:
@@ -82,7 +84,7 @@ class Migrate(object):
                             .format(resid=resource_id, type=type(e).__name__, err=e))
                     else:
                         raise
-                        
+
         return data_dict
 
     def _process_chunk(self, scroll_id, fields):
@@ -91,7 +93,7 @@ class Migrate(object):
         '''
         resource_url = self.es_url + '_search/scroll?scroll=10m'
         post = scroll_id
-        
+
         logger.debug("Processing chunk with schroll id: {id}".format(id=scroll_id))
 
         results = self._request(resource_url, post)
@@ -112,7 +114,7 @@ class Migrate(object):
             else:
                 field['type'] = self.type_mapping[value['type']]
                 if 'format' in value:
-                    field['format'] = p_format = value['format']
+                    field['format'] = value['format']
             fields.append(field)
         return fields
 
@@ -132,7 +134,7 @@ class Migrate(object):
                     elif field['type'] == 'timestamp':
                         # guess whether the date is day first
                         dayfirst = not field['format'].lower().startswith('m')
-                        isodate = str(parse(value, dayfirst = dayfirst))
+                        isodate = str(parse(value, dayfirst=dayfirst))
                         logger.debug("Found a date: {date} with the format {format} which is parsed to {isodate}"
                             .format(date=value, format=field['format'], isodate=isodate))
                         value = isodate
@@ -151,8 +153,8 @@ class Migrate(object):
 
     def _mapping_iterator(self):
         '''
-        Iterator for resources from the mapping. The mapping can be dumped in order to 
-        use the same mapping for multiple runs. 
+        Iterator for resources from the mapping. The mapping can be dumped in order to
+        use the same mapping for multiple runs.
         '''
         mapping = None
 
@@ -161,7 +163,7 @@ class Migrate(object):
             logger.warn("Use dumped mapping: {path}".format(path=path))
             with open(path, 'r') as dump:
                 mapping = json.loads(dump.read())
-        
+
         if not mapping:
             mapping_url = self.url + '/' + '_mapping'
             logger.info("Mapping url: {url}".format(url=mapping_url))
@@ -183,12 +185,12 @@ class Migrate(object):
 
         get = {
             'search_type': 'scan',
-            'scroll': '10m', # lifetime 
+            'scroll': '10m',  # lifetime
             'size': self.chunk_size
         }
         post = {
             'query': {
-                "match_all" : {}
+                "match_all": {}
             }
         }
 
@@ -201,7 +203,7 @@ class Migrate(object):
 
         scroll_id = scroll['_scroll_id']
         total = scroll['hits']['total']
-        
+
         logger.debug("Initial scroll id: {id}".format(id=scroll_id))
 
         logger.info("Found {total} records".format(total=total))
@@ -211,7 +213,7 @@ class Migrate(object):
             records_chunk, scroll_id, count = self._process_chunk(scroll_id, fields)
             yield records_chunk
 
-    def _request(self, url, query = None):
+    def _request(self, url, query=None):
         '''Perform a request on ElasticSearch endpoint.
         :param url: a url for the request
         :param query: a dictionary specifying the elasticsearch query as per
@@ -232,7 +234,7 @@ class Migrate(object):
         '''
         tries to clean the field name
         '''
-        
+
         # strip ", whitespaces and _
         name = name.strip().strip('"').strip("_").strip()
 
@@ -242,7 +244,7 @@ class Migrate(object):
         # truncate because of maximum field size of 63 in pg
         if len(name) >= 63:
             name = name[:56] + hashlib.md5(name).hexdigest()[:6]
-        
+
         # transform empty names
         if not name:
             name = '##empty##'
@@ -262,20 +264,20 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Migrate from elasticsearch to the CKAN datastore', 
+        description='Migrate from elasticsearch to the CKAN datastore',
         epilog='"He reached out and pressed an invitingly large red button on a nearby panel. The panel lit up with the words Please do not press this button again."')
-    
-    parser.add_argument('config', metavar='CONFIG', type=file, 
+
+    parser.add_argument('config', metavar='CONFIG', type=file,
                        help='configuration file')
 
     parser.add_argument('--max', metavar='N', type=int, default=None, dest='max_records',
                        help='maximum number of records to process (default is unlimited)')
     parser.add_argument('--start', metavar='START-RES-ID', type=str, default=None, dest='start',
                        help='resource id to start with (default is the beginning)')
-    parser.add_argument('-s', '--simulate', action='store_true', dest='simulate', default=False, 
+    parser.add_argument('-s', '--simulate', action='store_true', dest='simulate', default=False,
                        help="don't store anything in the database")
-    parser.add_argument('--segments', dest='segments', default=None, metavar='SEGMENTS', 
-                       help="only process items where the hash starts with SEGMENTS")
+    parser.add_argument('--segments', dest='segments', default=None, metavar='SEGMENTS',
+                       help="only process items where the first character in the hash is in SEGMENTS")
 
     args = parser.parse_args()
 

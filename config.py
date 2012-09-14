@@ -19,13 +19,13 @@ config = {
         'double': 'float8',
         'date': 'timestamp',
         'int': 'int4',
-        'nested': '_json'
+        'nested': 'json'
     },
 
     # size for a part of the record during scrolling
     'chunk_size': 100,
 
-    # use a dumped mapping file, if available or create it 
+    # use a dumped mapping file, if available or create it
     'use_dump': False,
 
     # ignore errors when saving data to the datastore and log the incident
