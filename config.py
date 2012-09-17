@@ -18,7 +18,7 @@ config = {
         'long': 'int8',
         'double': 'float8',
         'date': 'timestamp',
-        'int': 'int4',
+        'integer': 'int4',
         'nested': 'json',
         'geo_point': 'float8[2]'
     },
