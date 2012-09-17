@@ -20,7 +20,7 @@ config = {
         'date': 'timestamp',
         'integer': 'int4',
         'nested': 'json',
-        'geo_point': 'float8[2]'
+        'geo_point': 'json'
     },
 
     # size for a part of the record during scrolling
