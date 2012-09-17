@@ -54,6 +54,7 @@ class Migrate(object):
         '''
         self.mapiter = self._mapping_iterator()
 
+        logger.info("START")
         processed = 0
         for i, (resource_id, properties) in enumerate(self.mapiter):
             jump_because_not_start = self.start_id and resource_id != self.start_id
@@ -71,6 +72,7 @@ class Migrate(object):
             logger.info("Processing resource nr {nr} of {total} with id {resid}".format(nr=i, total=self.total, resid=resource_id))
             self.active_resource_id = resource_id
             self._process_resource(resource_id, properties)
+        logger.info("DONE")
 
     def _process_resource(self, resource_id, properties):
         fields = self._extract_fields(properties['properties'])
@@ -136,7 +138,11 @@ class Migrate(object):
                     elif field['type'] == 'timestamp':
                         # guess whether the date is day first
                         dayfirst = not field['format'].lower().startswith('m')
-                        isodate = str(parse(value, dayfirst=dayfirst))
+                        try:
+                            isodate = str(parse(value, dayfirst=dayfirst))
+                        except Exception:
+                            logger.critical("Exception when parsing date '{0}'. Use 1970-01-01.".format(value))
+                            isodate = '1970-01-01'
                         logger.debug("Found a date: {date} with the format {format} which is parsed to {isodate}"
                             .format(date=value, format=field['format'], isodate=isodate))
                         value = isodate
