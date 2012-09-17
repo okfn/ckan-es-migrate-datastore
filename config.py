@@ -19,7 +19,8 @@ config = {
         'double': 'float8',
         'date': 'timestamp',
         'int': 'int4',
-        'nested': 'json'
+        'nested': 'json',
+        'geo_point': 'float8[2]'
     },
 
     # size for a part of the record during scrolling

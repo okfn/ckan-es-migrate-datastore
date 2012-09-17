@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 '''
 A basic script to migrate from elasticsearch to the ckan datastore that uses postgresql.
 
@@ -21,7 +23,7 @@ import logging
 from pprint import pprint as pp
 import hashlib
 
-if not os.environ.get('DATASTORE_LOAD'):
+if os.environ.get('DATASTORE_LOAD'):
     import db
 else:
     import ckanext.datastore.db as db
@@ -52,7 +54,7 @@ class Migrate(object):
         '''
         self.mapiter = self._mapping_iterator()
 
-        started_at = 0
+        processed = 0
         for i, (resource_id, properties) in enumerate(self.mapiter):
             jump_because_not_start = self.start_id and resource_id != self.start_id
             jump_because_segment = self.segments and not hashlib.md5(resource_id).hexdigest()[1] in self.segments
@@ -60,15 +62,15 @@ class Migrate(object):
                 logger.debug("Jumping over {resid}".format(resid=resource_id))
                 continue
             elif self.start_id and resource_id == self.start_id:
-                started_at = i
                 self.start_id = None
 
-            if self.max_records and i - started_at >= self.max_records:
+            if self.max_records and processed >= self.max_records:
                 break
+            processed += 1
 
             logger.info("Processing resource nr {nr} of {total} with id {resid}".format(nr=i, total=self.total, resid=resource_id))
             self.active_resource_id = resource_id
-            data_dict = self._process_resource(resource_id, properties)
+            self._process_resource(resource_id, properties)
 
     def _process_resource(self, resource_id, properties):
         fields = self._extract_fields(properties['properties'])
@@ -243,7 +245,7 @@ class Migrate(object):
 
         # truncate because of maximum field size of 63 in pg
         if len(name) >= 63:
-            name = name[:56] + hashlib.md5(name).hexdigest()[:6]
+            name = name[:56] + hashlib.md5(name.encode('utf-8')).hexdigest()[:6]
 
         # transform empty names
         if not name:
@@ -253,7 +255,7 @@ class Migrate(object):
 
     def _save(self, data_dict):
         context = {}
-        data_dict['connection_url'] =  self.postgres_url
+        data_dict['connection_url'] = self.postgres_url
         result = db.create(context, data_dict)
 
 
