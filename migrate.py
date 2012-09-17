@@ -249,9 +249,12 @@ class Migrate(object):
         # replace all " with '
         name = name.replace('"', "'")
 
-        # truncate because of maximum field size of 63 in pg
-        if len(name) >= 63:
-            name = name[:56] + hashlib.md5(name.encode('utf-8')).hexdigest()[:6]
+        # truncate because of maximum field size of 63 bytes in pg
+        name_str = name.encode('utf-8')
+        if len(name_str) >= 63:
+            part_0 = name_str[:56].decode('utf-8', 'ignore')  # ignore because of unicode padding
+            part_1 = hashlib.md5(name_str).hexdigest()[:6]
+            name = u''.join([part_0, part_1])
 
         # transform empty names
         if not name:
@@ -262,7 +265,7 @@ class Migrate(object):
     def _save(self, data_dict):
         context = {}
         data_dict['connection_url'] = self.postgres_url
-        result = db.create(context, data_dict)
+        db.create(context, data_dict)
 
 
 ## ======================================
