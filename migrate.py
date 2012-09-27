@@ -42,7 +42,7 @@ class Migrate(object):
 
         self.url = self.es_url + self.index
 
-        self.active_resource_id = None # only for logging
+        self.active_resource_id = None  # only for logging
 
         self.total = len([0 for x in self._mapping_iterator()])
 
@@ -182,7 +182,7 @@ class Migrate(object):
                 with open(path, 'w+') as dump:
                     dump.write(json.dumps(mapping))
 
-        for key, value in mapping['ckan-www.ckan.net'].items():
+        for key, value in mapping[self.index].items():
             yield key, value
 
     def _scan_iterator(self, resource_id, fields):
