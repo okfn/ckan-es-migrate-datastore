@@ -13,14 +13,16 @@ Make yourself familiar with the settings and try running the script in simulatio
 mode first.
 '''
 
-import urllib2, urllib
+import urllib2
+import urllib
 import json
-from time import gmtime, strftime
-from dateutil.parser import *
-from datetime import *
-import os, imp
+import dateutil.parser as parser
+import datetime
+import os
+import imp
 import logging
 from pprint import pprint as pp
+import sqlalchemy
 import hashlib
 
 if os.environ.get('DATASTORE_LOAD'):
@@ -54,9 +56,18 @@ class Migrate(object):
         '''
         self.mapiter = self._mapping_iterator()
 
+        if self.filter_resource_ids:
+            resource_ids = self._fetch_ckan_resource_ids()
+            logger.info("Fetched %d resource_ids from meta-data catalogue", len(resource_ids))
+
         logger.info("START")
         processed = 0
         for i, (resource_id, properties) in enumerate(self.mapiter):
+
+            if self.filter_resource_ids and resource_id not in resource_ids:
+                logger.info('Skipping %s (not in meta-data catalogue)', resource_id)
+                continue
+
             jump_because_not_start = self.start_id and resource_id != self.start_id
             jump_because_segment = self.segments and not hashlib.md5(resource_id).hexdigest()[1] in self.segments
             if jump_because_not_start or jump_because_segment:
@@ -73,6 +84,26 @@ class Migrate(object):
             self.active_resource_id = resource_id
             self._process_resource(resource_id, properties)
         logger.info("DONE")
+
+    def _fetch_ckan_resource_ids(self):
+        '''Fetch the ids of the resources in the meta-data catalogue
+
+        The elastic-search index may contain resources for many ckan
+        instances, so we need to filter on those that belong to the ckan
+        instance that's being migrated.'''
+        logger.info("Fetching resource ids from the ckan meta data catalogue")
+        engine = sqlalchemy.create_engine(self.ckan_postgres_url)
+        connection = engine.connect()
+        try:
+            resource_ids = connection.execute(
+                u'SELECT id FROM resource'
+            ).fetchall()
+            return set(id[0] for id in resource_ids)
+        except Exception, e:
+            logger.critical(u'Could not fetch resource ids from meta-data catalogue: %s', unicode(e))
+            raise
+        finally:
+            connection.close()
 
     def _process_resource(self, resource_id, properties):
         fields = self._extract_fields(properties['properties'])
@@ -102,6 +133,7 @@ class Migrate(object):
 
         results = self._request(resource_url, post)
 
+        pp(results)
         count = len(results['hits']['hits'])
         records = self._extract_records(results['hits']['hits'], fields)
         new_scroll_id = results['_scroll_id']
@@ -139,7 +171,7 @@ class Migrate(object):
                         # guess whether the date is day first
                         dayfirst = not field['format'].lower().startswith('m')
                         try:
-                            isodate = str(parse(value, dayfirst=dayfirst))
+                            isodate = str(parser.parse(value, dayfirst=dayfirst))
                         except Exception:
                             logger.critical("Exception when parsing date '{0}'. Use 1970-01-01.".format(value))
                             isodate = '1970-01-01'
@@ -274,23 +306,23 @@ class Migrate(object):
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(
+    argparser = argparse.ArgumentParser(
         description='Migrate from elasticsearch to the CKAN datastore',
         epilog='"He reached out and pressed an invitingly large red button on a nearby panel. The panel lit up with the words Please do not press this button again."')
 
-    parser.add_argument('config', metavar='CONFIG', type=file,
+    argparser.add_argument('config', metavar='CONFIG', type=file,
                        help='configuration file')
 
-    parser.add_argument('--max', metavar='N', type=int, default=None, dest='max_records',
+    argparser.add_argument('--max', metavar='N', type=int, default=None, dest='max_records',
                        help='maximum number of records to process (default is unlimited)')
-    parser.add_argument('--start', metavar='START-RES-ID', type=str, default=None, dest='start',
+    argparser.add_argument('--start', metavar='START-RES-ID', type=str, default=None, dest='start',
                        help='resource id to start with (default is the beginning)')
-    parser.add_argument('-s', '--simulate', action='store_true', dest='simulate', default=False,
+    argparser.add_argument('-s', '--simulate', action='store_true', dest='simulate', default=False,
                        help="don't store anything in the database")
-    parser.add_argument('--segments', dest='segments', default=None, metavar='SEGMENTS',
+    argparser.add_argument('--segments', dest='segments', default=None, metavar='SEGMENTS',
                        help="only process items where the first character in the hash is in SEGMENTS")
 
-    args = parser.parse_args()
+    args = argparser.parse_args()
 
     config = imp.load_source('config', args.config.name)
 
