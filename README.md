@@ -4,16 +4,16 @@ Migrate [elasticsearch](http://www.elasticsearch.org) to the [CKAN](http://ckan.
 
 The script is configured with command line parameters (for frequently changing preferences) and the config file. Make yourself familiar with the settings and try running the script in simulation mode first. 
 
-## How to migrate from the Elasticsearch datastore to the new datastore in less than 10 steps
+## How to migrate from the Elasticsearch datastore to the new datastore
 
 _Note:_ This step by step introduction shows a possible migration. Some steps may differ in your setup.
 
-1. Create a PostgreSQL database for the datastore and a read only user as described in [the docs](http://docs.ckan.org/en/master/datastore.html).
-2. Either have CKAN installed and the migration script in `ckanext/migration/` or copy the `db.py` from `\ckanext\datastore` to the same directory that the `migration.py` is in. The second option allows you to run the migration without having CKAN on the same server or even installed.
-3. Make sure you have all requirements installed.
-4. Adapt the `config.py` to your needs.
-5. Make yourself familiar with the command line options. The option `-h` will show possible command line options and some explanations. 
-6. Make sure that the settings are correct
+* Create a PostgreSQL database for the datastore and a read only user as described in [the docs](http://docs.ckan.org/en/master/datastore.html).
+* Either have CKAN installed and the migration script in `ckanext/migration/` or copy the `db.py` from `\ckanext\datastore` to the same directory that the `migration.py` is in. The second option allows you to run the migration without having CKAN on the same server or even installed.
+* Make sure you have all requirements installed.
+* Adapt the `config.py` to your needs.
+* Make yourself familiar with the command line options. The option `-h` will show possible command line options and some explanations. 
+* Make sure that the settings are correct
 
 Commands:
 
@@ -30,7 +30,7 @@ Commands:
     # You can run the migration in parallel to speed things up. Let's try the simulation first.
     ./simulateall.bash
     
-7. Start the migration
+* Start the migration
 
 Commands:
 
@@ -40,8 +40,8 @@ Commands:
     # Serial execution
     $ python migrate.py config.py
 
-8. Monitor the progress of the migration. Use `tail -f <logfile>` to see what's happening if you pipe the output to a log file.
-9. Enjoy the new datastore
+* Monitor the progress of the migration. Use `tail -f <logfile>` to see what's happening if you pipe the output to a log file.
+* Enjoy the new datastore
 
 ## Good to know
 
