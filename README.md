@@ -8,7 +8,7 @@ The script is configured with command line parameters (for frequently changing p
 
 _Note:_ This step by step introduction shows a possible migration. Some steps may differ in your setup.
 
-* Create a PostgreSQL database for the datastore and a read only user as described in [the docs](http://docs.ckan.org/en/master/datastore.html).
+* Create a PostgreSQL database for the datastore and a read only user as described in [the docs](http://docs.ckan.org/en/latest/datastore.html).
 * Either have CKAN installed and the migration script in `ckanext/migration/` or copy the `db.py` from `\ckanext\datastore` to the same directory that the `migration.py` is in. The second option allows you to run the migration without having CKAN on the same server or even installed.
 * Make sure you have all requirements installed.
 * Adapt the `config.py` to your needs.
