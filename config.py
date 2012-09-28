@@ -35,6 +35,9 @@ config = {
     # ignore errors when saving data to the datastore and log the incident
     'ignore_exceptions': False,
 
+    # skip resources with 0 records
+    'skip_empty_resources': True,
+
     # filter resource ids by those available in the meta-data catalogue
     'filter_resource_ids': False
 }

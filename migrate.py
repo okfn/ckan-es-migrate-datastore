@@ -80,10 +80,10 @@ class Migrate(object):
                 break
             processed += 1
 
-            logger.info("Processing resource nr {nr} of {total} with id {resid}".format(nr=i, total=self.total, resid=resource_id))
+            logger.info('Processing resource nr {nr} of {total} with id "{resid}"'.format(nr=i, total=self.total, resid=resource_id))
             self.active_resource_id = resource_id
             self._process_resource(resource_id, properties)
-        logger.info("DONE")
+        logger.info('Done')
 
     def _fetch_ckan_resource_ids(self):
         '''Fetch the ids of the resources in the meta-data catalogue
@@ -110,12 +110,13 @@ class Migrate(object):
 
         for records_chunk in self._scan_iterator(resource_id, fields):
             data_dict = {'resource_id': resource_id, 'fields': fields, 'records': records_chunk}
+
             if not self.simulate:
                 try:
                     self._save(data_dict)
                 except Exception, e:
                     if self.ignore_exceptions:
-                        logger.critical("An exception was raised while saving resource: {resid}. \n{type} {err}"
+                        logger.critical('An exception was raised while saving resource: {resid}. \n{type} {err}'
                             .format(resid=resource_id, type=type(e).__name__, err=e))
                     else:
                         raise
@@ -129,11 +130,18 @@ class Migrate(object):
         resource_url = self.es_url + '_search/scroll?scroll=10m'
         post = scroll_id
 
-        logger.debug("Processing chunk with schroll id: {id}".format(id=scroll_id))
+        logger.debug('Processing chunk with schroll id: {id}'.format(id=scroll_id))
 
         results = self._request(resource_url, post)
 
-        pp(results)
+        if results['_shards']['failed'] > 0:
+            logger.warn('Some shards failed to load in resource "{resource}"'.format(
+                resource=self.active_resource_id))
+
+        if results['timed_out']:
+            logger.warn('Timeout when fetching resource "{resource}"'.format(
+                resource=self.active_resource_id))
+
         count = len(results['hits']['hits'])
         records = self._extract_records(results['hits']['hits'], fields)
         new_scroll_id = results['_scroll_id']
@@ -173,9 +181,9 @@ class Migrate(object):
                         try:
                             isodate = str(parser.parse(value, dayfirst=dayfirst))
                         except Exception:
-                            logger.critical("Exception when parsing date '{0}'. Use 1970-01-01.".format(value))
+                            logger.critical('Exception when parsing date "{0}". Use 1970-01-01.'.format(value))
                             isodate = '1970-01-01'
-                        logger.debug("Found a date: {date} with the format {format} which is parsed to {isodate}"
+                        logger.debug('Found a date: {date} with the format {format} which is parsed to {isodate}'
                             .format(date=value, format=field['format'], isodate=isodate))
                         value = isodate
                     record[key] = value
@@ -186,8 +194,8 @@ class Migrate(object):
                     else:
                         l1 = logging.DEBUG
                         l2 = logging.DEBUG
-                    logger.log(l1, "Found a field that is not in the mapping: {fieldname} in {resource}".format(fieldname=key, resource=self.active_resource_id))
-                    logger.log(l2, "The field has the value '{val}'".format(val=value))
+                    logger.log(l1, 'Found a field that is not in the mapping: {fieldname} in {resource}'.format(fieldname=key, resource=self.active_resource_id))
+                    logger.log(l2, 'The field has the value "{val}"'.format(val=value))
             records.append(record)
         return records
 
@@ -247,6 +255,10 @@ class Migrate(object):
         logger.debug("Initial scroll id: {id}".format(id=scroll_id))
 
         logger.info("Found {total} records".format(total=total))
+
+        if self.skip_empty_resources and total == 0:
+            logger.info('Skipped resource because it is empty.')
+            return
 
         count = True
         while count:
