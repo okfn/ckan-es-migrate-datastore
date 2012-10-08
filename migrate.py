@@ -17,7 +17,6 @@ import urllib2
 import urllib
 import json
 import dateutil.parser as parser
-import datetime
 import os
 import imp
 import logging
@@ -151,14 +150,13 @@ class Migrate(object):
     def _extract_fields(self, properties):
         fields = []
         for p_id, value in properties.items():
-            field = {'id': self._validate_field_name(p_id)}
-            # nested type
-            if 'dynamic' in value:
-                field['type'] = self.type_mapping['nested']
-            else:
-                field['type'] = self.type_mapping[value['type']]
-                if 'format' in value:
-                    field['format'] = value['format']
+            field = {
+                'id': self._validate_field_name(p_id),
+                'es_type': value['type']
+            }
+            field['type'] = self.type_mapping[value['type']]
+            if 'format' in value:
+                field['format'] = value['format']
             fields.append(field)
         return fields
 
@@ -173,9 +171,11 @@ class Migrate(object):
                 field = [x for x in fields if x['id'] == key]
                 if len(field) == 1:
                     field = field[0]
-                    if field['type'] == 'text':
+                    if field['type'] in ['string', 'text']:
                         value = unicode(value)
-                    elif field['type'] == 'timestamp':
+                    if field['es_type'] == 'geo_point':
+                        value = [value['lat'], value['lon']]
+                    elif field['type'] in ['date', 'timestamp']:
                         # guess whether the date is day first
                         dayfirst = not field['format'].lower().startswith('m')
                         try:

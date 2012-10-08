@@ -22,8 +22,8 @@ config = {
         'double': 'float8',
         'date': 'timestamp',
         'integer': 'int4',
-        'nested': 'json',
-        'geo_point': '_float8'
+        'geo_point': 'float[2]',
+        #'dynamic': 'json'
     },
 
     # size for a part of the record during scrolling
